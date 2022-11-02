@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+service RaftService {
+  rpc RequestVote(TermIdMessage) returns (TermResultMessage);
+  rpc AppendEntries(TermIdMessage) returns (TermResultMessage);
+  rpc SendHeartBeat(Empty) returns (Empty);
+}
+
+service ClientService {
+  rpc Connect(Empty) returns (TermIdMessage);
+  rpc GetLeader(Empty) returns (IdAddressMessage);
+  rpc Suspend(IntMessage) returns (Empty);
+}
+
+message Empty {}
+
+message TermIdMessage {
+  int32 term = 1;
+  int32 id = 2;
+}
+
+message TermResultMessage {
+  int32 term = 1;
+  bool result = 2;
+}
+
+message IdAddressMessage{
+  int32 id = 1;
+  string address = 2;
+}
+
+message IntMessage {
+  int32 value = 1;
+}
