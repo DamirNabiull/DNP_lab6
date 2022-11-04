@@ -9,16 +9,42 @@ import grpc
 import zlib
 import sys
 
+leader_id: int
 server_id: int
+server_addr: str
 term: int
 last_vote_term: int
 state: int  # 0 - Follower, 1 - Candidate, 2 - Leader
 timer_time: int  # ?
 timer: Timer
 hb_timer: Timer
+is_suspend: bool
 servers = {}
 total_servers: int
 config_file = "config.conf"
+
+
+class ClientSH(pb2_grpc.ClientServiceServicer):
+    def Connect(self, request, context):
+        global term, server_id
+
+        reply = {"term": term, "id": server_id}
+        return pb2.TermIdMessage(**reply)
+
+    def GetLeader(self, request, context):
+        global leader_id, servers, server_id, server_addr
+
+        if leader_id == server_id:
+            address = server_addr
+        else:
+            address = servers[leader_id]
+
+        reply = {"id": leader_id, "address": address}
+        return pb2.IdAddressMessage(**reply)
+
+    def Suspend(self, request, context):
+        # Add actions
+        return
 
 
 class RaftSH(pb2_grpc.RaftServiceServicer):
@@ -47,7 +73,7 @@ def start_election():
 
 
 def read_config():
-    global servers, server_id, total_servers
+    global servers, server_id, total_servers, server_addr
 
     with open(config_file) as fp:
         lines = fp.readlines()
@@ -56,7 +82,8 @@ def read_config():
             servers[int(id_)] = f"{ip}:{port}"
 
     total_servers = len(servers)
-    return servers.pop(server_id)
+    server_addr = servers.pop(server_id)
+    return server_addr
 
 
 def update_timer():
