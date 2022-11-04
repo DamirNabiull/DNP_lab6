@@ -119,6 +119,7 @@ def print_state():
 
 if __name__ == '__main__':
     server_id = int(sys.argv[1])
+    leader_id = -1
 
     server_addr = "Undefined"
     read_config()
