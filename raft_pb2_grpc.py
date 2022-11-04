@@ -24,11 +24,6 @@ class RaftServiceStub(object):
                 request_serializer=raft__pb2.TermIdMessage.SerializeToString,
                 response_deserializer=raft__pb2.TermResultMessage.FromString,
                 )
-        self.SendHeartBeat = channel.unary_unary(
-                '/RaftService/SendHeartBeat',
-                request_serializer=raft__pb2.Empty.SerializeToString,
-                response_deserializer=raft__pb2.Empty.FromString,
-                )
 
 
 class RaftServiceServicer(object):
@@ -46,12 +41,6 @@ class RaftServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def SendHeartBeat(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
 
 def add_RaftServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -64,11 +53,6 @@ def add_RaftServiceServicer_to_server(servicer, server):
                     servicer.AppendEntries,
                     request_deserializer=raft__pb2.TermIdMessage.FromString,
                     response_serializer=raft__pb2.TermResultMessage.SerializeToString,
-            ),
-            'SendHeartBeat': grpc.unary_unary_rpc_method_handler(
-                    servicer.SendHeartBeat,
-                    request_deserializer=raft__pb2.Empty.FromString,
-                    response_serializer=raft__pb2.Empty.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -111,23 +95,6 @@ class RaftService(object):
         return grpc.experimental.unary_unary(request, target, '/RaftService/AppendEntries',
             raft__pb2.TermIdMessage.SerializeToString,
             raft__pb2.TermResultMessage.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def SendHeartBeat(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/RaftService/SendHeartBeat',
-            raft__pb2.Empty.SerializeToString,
-            raft__pb2.Empty.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
