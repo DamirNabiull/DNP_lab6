@@ -38,6 +38,8 @@ class ClientSH(pb2_grpc.ClientServiceServicer):
 
         if leader_id == server_id:
             address = server_addr
+        elif leader_id == -1:
+            address = "Haven't leader"
         else:
             address = servers[leader_id]
 
