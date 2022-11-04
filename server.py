@@ -34,17 +34,26 @@ class ClientSH(pb2_grpc.ClientServiceServicer):
     def GetLeader(self, request, context):
         global leader_id, servers, server_id, server_addr
 
+        print("Command from client: getleader")
+
         if leader_id == server_id:
             address = server_addr
         else:
             address = servers[leader_id]
+
+        print(leader_id, address)
 
         reply = {"id": leader_id, "address": address}
         return pb2.IdAddressMessage(**reply)
 
     def Suspend(self, request, context):
         suspend_time = request.value
+        print("Command from client: suspend", suspend_time)
         start_suspend(suspend_time)
+
+        # MOVE THIS PRINT TO TIMER
+        print("Sleeping for", suspend_time, "seconds")
+
         return pb2.Empty(**{})
 
 
