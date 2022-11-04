@@ -43,8 +43,9 @@ class ClientSH(pb2_grpc.ClientServiceServicer):
         return pb2.IdAddressMessage(**reply)
 
     def Suspend(self, request, context):
-        # Add actions
-        return
+        suspend_time = request.value
+        start_suspend(suspend_time)
+        return pb2.Empty(**{})
 
 
 class RaftSH(pb2_grpc.RaftServiceServicer):
@@ -69,6 +70,7 @@ class RaftSH(pb2_grpc.RaftServiceServicer):
 
 
 def start_election():
+    # ADD ACTIONS
     pass
 
 
@@ -88,6 +90,11 @@ def read_config():
 def update_timer():
     global timer
     timer = Timer(timer_time / 1000, start_election)
+
+
+def start_suspend(time_):
+    # ADD ACTIONS
+    pass
 
 
 def print_state():
