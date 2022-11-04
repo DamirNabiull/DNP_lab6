@@ -3,7 +3,6 @@ syntax = "proto3";
 service RaftService {
   rpc RequestVote(TermIdMessage) returns (TermResultMessage);
   rpc AppendEntries(TermIdMessage) returns (TermResultMessage);
-  rpc SendHeartBeat(Empty) returns (Empty);
 }
 
 service ClientService {
