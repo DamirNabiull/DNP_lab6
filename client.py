@@ -23,14 +23,14 @@ if __name__ == '__main__':
                 try:
                     channel = grpc.insecure_channel(args)
                     stub = pb2_grpc.ClientServiceStub(channel)
-                    response = stub.Connect(pb2.Empty)
-                    print("Connect: ", response.result)
+                    response = stub.Connect(pb2.Empty())
+                    print("Connect: ", response.id)
                 except Exception as e:
                     print("Unable to connect")
                     channel, stub = None, None
             elif cmd == 'getleader':
                 if not (channel is None or stub is None):
-                    response = stub.GetLeader(pb2.Empty)
+                    response = stub.GetLeader(pb2.Empty())
                     print(response.id, " ", response.address)
                 else:
                     print("Not connected")
