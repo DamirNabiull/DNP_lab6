@@ -14,7 +14,10 @@ term: int
 last_vote_term: int
 state: int  # 0 - Follower, 1 - Candidate, 2 - Leader
 timer_time: int  # ?
+timer: Timer
+hb_timer: Timer
 servers = {}
+total_servers: int
 config_file = "config.conf"
 
 
@@ -23,6 +26,7 @@ class RaftSH(pb2_grpc.RaftServiceServicer):
         global term, last_vote_term, state
 
         # UPDATE TIMER
+        update_timer()
 
         term_ = request.term
         id_ = request.id
@@ -38,8 +42,12 @@ class RaftSH(pb2_grpc.RaftServiceServicer):
         return pb2.TermResultMessage(**reply)
 
 
+def start_election():
+    pass
+
+
 def read_config():
-    global servers, server_id
+    global servers, server_id, total_servers
 
     with open(config_file) as fp:
         lines = fp.readlines()
@@ -47,11 +55,32 @@ def read_config():
             id_, ip, port = line.split()
             servers[int(id_)] = f"{ip}:{port}"
 
+    total_servers = len(servers)
     return servers.pop(server_id)
+
+
+def update_timer():
+    global timer
+    timer = Timer(timer_time / 1000, start_election)
+
+
+def print_state():
+    if state == 0:
+        print("I am a follower. Term:", term)
+    elif state == 1:
+        print("I am a candidate. Term:", term)
+    elif state == 1:
+        print("I am a leader. Term:", term)
+    else:
+        print("SOMETHING WENT WRONG")
 
 
 if __name__ == '__main__':
     server_id = int(sys.argv[1])
     addr = read_config()
+
+    timer_time = randint(150, 300)
+    term = 0
+    state = 0
 
 
