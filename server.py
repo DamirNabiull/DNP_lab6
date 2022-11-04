@@ -83,7 +83,6 @@ def read_config():
 
     total_servers = len(servers)
     server_addr = servers.pop(server_id)
-    return server_addr
 
 
 def update_timer():
@@ -104,10 +103,24 @@ def print_state():
 
 if __name__ == '__main__':
     server_id = int(sys.argv[1])
-    addr = read_config()
+
+    server_addr = "Undefined"
+    read_config()
 
     timer_time = randint(150, 300)
     term = 0
     state = 0
 
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    # pb2_grpc.add_RaftServiceServicer_to_server(RaftSH(), server)
+    pb2_grpc.add_ClientServiceServicer_to_server(ClientSH(), server)
 
+    server.add_insecure_port(server_addr)
+    server.start()
+
+    print("The server starts at", server_addr)
+
+    try:
+        server.wait_for_termination()
+    except KeyboardInterrupt:
+        print('Shutting down')
