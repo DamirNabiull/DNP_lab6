@@ -21,6 +21,7 @@ hb_timer: Timer
 is_suspend: bool
 servers = {}
 total_servers: int
+votes: int
 config_file = "config.conf"
 
 
@@ -63,16 +64,18 @@ class RaftSH(pb2_grpc.RaftServiceServicer):
     def RequestVote(self, request, context):
         global term, last_vote_term, state
 
-        # UPDATE TIMER
-        update_timer()
-
         term_ = request.term
         id_ = request.id
+
+        # UPDATE TIMER
+        if state == 0:
+            update_timer()
 
         if term <= term_ and last_vote_term < term_:
             state = 0
             term = term_
             last_vote_term = term_
+            update_timer()
             reply = {"term": term, "result": True}
             return pb2.TermResultMessage(**reply)
 
@@ -80,7 +83,53 @@ class RaftSH(pb2_grpc.RaftServiceServicer):
         return pb2.TermResultMessage(**reply)
 
 
+def request_votes():
+    # DOPISAT'
+    pass
+
+
 def start_election():
+    global term, state, votes, total_servers, last_vote_term
+    print("The leader is dead")
+
+    term += 1
+    last_vote_term = term
+    state = 1
+    votes = 1
+
+    update_timer()
+    print_state()
+    request_votes()
+
+    if votes > total_servers:
+        state = 2
+        close_timer()
+
+
+def close_timer():
+    global timer
+    timer.cancel()
+
+
+def new_timer():
+    global timer
+    timer = Timer(timer_time / 1000, start_election)
+    timer.start()
+
+
+def reset_timer():
+    global timer_time
+    timer_time = randint(150, 300)
+    new_timer()
+
+
+def update_timer():
+    global timer
+    close_timer()
+    new_timer()
+
+
+def start_suspend(time_):
     # ADD ACTIONS
     pass
 
@@ -96,16 +145,6 @@ def read_config():
 
     total_servers = len(servers)
     server_addr = servers.pop(server_id)
-
-
-def update_timer():
-    global timer
-    timer = Timer(timer_time / 1000, start_election)
-
-
-def start_suspend(time_):
-    # ADD ACTIONS
-    pass
 
 
 def print_state():
@@ -125,10 +164,9 @@ if __name__ == '__main__':
 
     server_addr = "Undefined"
     read_config()
-
-    timer_time = randint(150, 300)
     term = 0
     state = 0
+    is_suspend = False
 
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     # pb2_grpc.add_RaftServiceServicer_to_server(RaftSH(), server)
@@ -139,7 +177,12 @@ if __name__ == '__main__':
 
     print("The server starts at", server_addr)
 
+    reset_timer()
+    print_state()
+
     try:
         server.wait_for_termination()
     except KeyboardInterrupt:
         print('Shutting down')
+    finally:
+        close_timer()
