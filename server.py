@@ -68,14 +68,37 @@ class RaftSH(pb2_grpc.RaftServiceServicer):
         id_ = request.id
 
         # UPDATE TIMER
-        if state == 0:
-            update_timer()
+        # if state == 0:
+        restart_timer()
 
         if term <= term_ and last_vote_term < term_:
             state = 0
             term = term_
             last_vote_term = term_
-            update_timer()
+            print_vote(id_)
+            print_state()
+            # restart_timer()
+            reply = {"term": term, "result": True}
+            return pb2.TermResultMessage(**reply)
+
+        reply = {"term": term, "result": False}
+        return pb2.TermResultMessage(**reply)
+
+    def AppendEntries(self, request, context):
+        global term, last_vote_term, state, leader_id
+
+        term_ = request.term
+        id_ = request.id
+
+        # UPDATE TIMER
+        # if state == 0:
+        restart_timer()
+
+        if term_ >= term:
+            leader_id = id_
+            state = 0
+            term = term_
+            # restart_timer()
             reply = {"term": term, "result": True}
             return pb2.TermResultMessage(**reply)
 
@@ -89,17 +112,20 @@ def request_votes():
 
 
 def start_election():
-    global term, state, votes, total_servers, last_vote_term
+    global term, state, votes, total_servers, last_vote_term, leader_id, server_id
+
     print("The leader is dead")
 
+    leader_id = -1
     term += 1
     last_vote_term = term
     state = 1
     votes = 1
 
-    update_timer()
+    restart_timer()
     print_state()
     request_votes()
+    print_vote(server_id)
 
     if votes > total_servers:
         state = 2
@@ -123,7 +149,7 @@ def reset_timer():
     new_timer()
 
 
-def update_timer():
+def restart_timer():
     global timer
     close_timer()
     new_timer()
@@ -145,6 +171,10 @@ def read_config():
 
     total_servers = len(servers)
     server_addr = servers.pop(server_id)
+
+
+def print_vote(vote_id):
+    print(f"Voted for node {vote_id}")
 
 
 def print_state():
