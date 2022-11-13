@@ -63,8 +63,6 @@ class RaftSH(pb2_grpc.RaftServiceServicer):
     def RequestVote(self, request, context):
         global term, last_vote_term, state, is_suspend, leader_id
 
-        print("REQUEST VOTE")
-
         if is_suspend:
             return
 
@@ -114,9 +112,14 @@ class RaftSH(pb2_grpc.RaftServiceServicer):
             if state == 2:
                 close_hb_timer()
 
-            leader_id = id_
             state = 0
             term = term_
+
+            if leader_id != id_:
+                print_state()
+
+            leader_id = id_
+
             reply = {"term": term, "result": True}
             return pb2.TermResultMessage(**reply)
 
@@ -143,10 +146,11 @@ def append_entry(host):
 def append_entries():
     global servers, is_suspend
 
+    restart_hb_timer()
+
     if is_suspend:
         return
 
-    restart_hb_timer()
     threads = []
     for host in servers.values():
         threads.append(Thread(target=append_entry, args=(host,)))
@@ -179,6 +183,7 @@ def start_election():
     global term, state, votes, total_servers, last_vote_term, leader_id, server_id
 
     if is_suspend:
+        state = 0
         return
 
     print("The leader is dead")
@@ -211,7 +216,7 @@ def close_timer():
 def restart_timer():
     global timer, timer_time
     close_timer()
-    timer = Timer(timer_time / 40, start_election)  # FIX ME PLEASE (set 1000 instead of 40)
+    timer = Timer(timer_time / 1000, start_election)
     timer.start()
 
 
@@ -230,15 +235,17 @@ def close_hb_timer():
 def restart_hb_timer():
     global hb_timer
     close_hb_timer()
-    hb_timer = Timer(2, append_entries)  # FIX ME (SET 0.05)
+    hb_timer = Timer(0.05, append_entries)
     hb_timer.start()
 
 
 def end_suspend():
-    global suspend_timer, is_suspend
+    global suspend_timer, is_suspend, state
 
     is_suspend = False
     suspend_timer.cancel()
+    if state == 0:
+        restart_timer()
 
 
 def start_suspend(time_):
