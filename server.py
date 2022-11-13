@@ -56,10 +56,6 @@ class ClientSH(pb2_grpc.ClientServiceServicer):
         suspend_time = request.value
         print("Command from client: suspend", suspend_time)
         start_suspend(suspend_time)
-
-        # MOVE THIS PRINT TO TIMER
-        print("Sleeping for", suspend_time, "seconds")
-
         return pb2.Empty(**{})
 
 
@@ -240,14 +236,18 @@ def restart_hb_timer():
 
 def end_suspend():
     global suspend_timer, is_suspend
+
     is_suspend = False
     suspend_timer.cancel()
 
 
 def start_suspend(time_):
     global suspend_timer, is_suspend
+
+    print("Sleeping for", time_, "seconds")
     is_suspend = True
     suspend_timer = Timer(time_, end_suspend)
+    suspend_timer.start()
 
 
 def read_config():
