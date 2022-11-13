@@ -1,23 +1,26 @@
-from concurrent import futures
-from time import sleep
-import raft_pb2_grpc as pb2_grpc
-import raft_pb2 as pb2
-import threading
-from threading import Timer
-from random import randint
-import grpc
-import zlib
 import sys
+from concurrent import futures
+from random import randint
+from threading import Timer, Thread, Lock
 
-leader_id: int
-server_id: int
-server_addr: str
-term: int
+import grpc
+
+import raft_pb2 as pb2
+import raft_pb2_grpc as pb2_grpc
+
+leader_id: int  # id of leader server
+server_id: int  # id of this server
+server_addr: str  # server ip:port
+term: int  # term of the server
 last_vote_term: int
 state: int  # 0 - Follower, 1 - Candidate, 2 - Leader
 timer_time: int  # ?
 timer: Timer
+timer = None
 hb_timer: Timer
+hb_timer = None
+suspend_timer: Timer
+suspend_timer = None
 is_suspend: bool
 servers = {}
 total_servers: int
@@ -62,22 +65,33 @@ class ClientSH(pb2_grpc.ClientServiceServicer):
 
 class RaftSH(pb2_grpc.RaftServiceServicer):
     def RequestVote(self, request, context):
-        global term, last_vote_term, state
+        global term, last_vote_term, state, is_suspend, leader_id
+
+        print("REQUEST VOTE")
+
+        if is_suspend:
+            return
 
         term_ = request.term
         id_ = request.id
 
         # UPDATE TIMER
-        # if state == 0:
-        restart_timer()
+        if state == 0:
+            restart_timer()
 
         if term <= term_ and last_vote_term < term_:
+            if state > 0:
+                restart_timer()
+
+            if state == 2:
+                close_hb_timer()
+
             state = 0
             term = term_
             last_vote_term = term_
+            leader_id = id_
             print_vote(id_)
             print_state()
-            # restart_timer()
             reply = {"term": term, "result": True}
             return pb2.TermResultMessage(**reply)
 
@@ -85,20 +99,28 @@ class RaftSH(pb2_grpc.RaftServiceServicer):
         return pb2.TermResultMessage(**reply)
 
     def AppendEntries(self, request, context):
-        global term, last_vote_term, state, leader_id
+        global term, last_vote_term, state, leader_id, is_suspend
+
+        if is_suspend:
+            return
 
         term_ = request.term
         id_ = request.id
 
         # UPDATE TIMER
-        # if state == 0:
-        restart_timer()
+        if state == 0:
+            restart_timer()
 
         if term_ >= term:
+            if state > 0:
+                restart_timer()
+
+            if state == 2:
+                close_hb_timer()
+
             leader_id = id_
             state = 0
             term = term_
-            # restart_timer()
             reply = {"term": term, "result": True}
             return pb2.TermResultMessage(**reply)
 
@@ -106,13 +128,62 @@ class RaftSH(pb2_grpc.RaftServiceServicer):
         return pb2.TermResultMessage(**reply)
 
 
+def append_entry(host):
+    global term, server_id, votes, state
+    try:
+        channel = grpc.insecure_channel(host)
+        stub = pb2_grpc.RaftServiceStub(channel)
+        response = stub.AppendEntries(pb2.TermIdMessage(term=term, id=server_id))
+        if response.term > term:
+            close_hb_timer()
+            term = response.term
+            state = 0
+            print_state()
+            restart_timer()
+    except Exception as e:
+        pass
+
+
+def append_entries():
+    global servers, is_suspend
+
+    if is_suspend:
+        return
+
+    restart_hb_timer()
+    threads = []
+    for host in servers.values():
+        threads.append(Thread(target=append_entry, args=(host,)))
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+
+
+def request_vote(host):
+    global term, server_id, votes
+    try:
+        channel = grpc.insecure_channel(host)
+        stub = pb2_grpc.RaftServiceStub(channel)
+        response = stub.RequestVote(pb2.TermIdMessage(term=term, id=server_id))
+        if response.result:
+            votes += 1
+    except Exception as e:
+        pass
+
+
 def request_votes():
-    # DOPISAT'
-    pass
+    global servers, is_suspend
+    threads = []
+    for host in servers.values():
+        threads.append(Thread(target=request_vote, args=(host,)))
+    [t.start() for t in threads]
+    [t.join() for t in threads]
 
 
 def start_election():
     global term, state, votes, total_servers, last_vote_term, leader_id, server_id
+
+    if is_suspend:
+        return
 
     print("The leader is dead")
 
@@ -122,42 +193,61 @@ def start_election():
     state = 1
     votes = 1
 
-    restart_timer()
     print_state()
-    request_votes()
+    reset_timer()
     print_vote(server_id)
-
-    if votes > total_servers:
-        state = 2
+    request_votes()
+    if votes > total_servers // 2:
         close_timer()
+        state = 2
+        leader_id = server_id
+        print("Votes received")
+        print_state()
+        restart_hb_timer()
 
 
 def close_timer():
     global timer
-    timer.cancel()
+    if timer is not None:
+        timer.cancel()
 
 
-def new_timer():
-    global timer
-    timer = Timer(timer_time / 1000, start_election)
+def restart_timer():
+    global timer, timer_time
+    close_timer()
+    timer = Timer(timer_time / 40, start_election)  # FIX ME PLEASE (set 1000 instead of 40)
     timer.start()
 
 
 def reset_timer():
     global timer_time
     timer_time = randint(150, 300)
-    new_timer()
+    restart_timer()
 
 
-def restart_timer():
-    global timer
-    close_timer()
-    new_timer()
+def close_hb_timer():
+    global hb_timer
+    if hb_timer is not None:
+        hb_timer.cancel()
+
+
+def restart_hb_timer():
+    global hb_timer
+    close_hb_timer()
+    hb_timer = Timer(2, append_entries)  # FIX ME (SET 0.05)
+    hb_timer.start()
+
+
+def end_suspend():
+    global suspend_timer, is_suspend
+    is_suspend = False
+    suspend_timer.cancel()
 
 
 def start_suspend(time_):
-    # ADD ACTIONS
-    pass
+    global suspend_timer, is_suspend
+    is_suspend = True
+    suspend_timer = Timer(time_, end_suspend)
 
 
 def read_config():
@@ -178,11 +268,12 @@ def print_vote(vote_id):
 
 
 def print_state():
+    global state, term
     if state == 0:
         print("I am a follower. Term:", term)
     elif state == 1:
         print("I am a candidate. Term:", term)
-    elif state == 1:
+    elif state == 2:
         print("I am a leader. Term:", term)
     else:
         print("SOMETHING WENT WRONG")
@@ -195,14 +286,16 @@ if __name__ == '__main__':
     server_addr = "Undefined"
     read_config()
     term = 0
+    last_vote_term = -1
     state = 0
     is_suspend = False
 
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    # pb2_grpc.add_RaftServiceServicer_to_server(RaftSH(), server)
+    pb2_grpc.add_RaftServiceServicer_to_server(RaftSH(), server)
     pb2_grpc.add_ClientServiceServicer_to_server(ClientSH(), server)
 
-    server.add_insecure_port(server_addr)
+    status = server.add_insecure_port(server_addr)
+    print(status)
     server.start()
 
     print("The server starts at", server_addr)
@@ -216,3 +309,4 @@ if __name__ == '__main__':
         print('Shutting down')
     finally:
         close_timer()
+        close_hb_timer()
