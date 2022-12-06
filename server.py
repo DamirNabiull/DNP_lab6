@@ -27,6 +27,19 @@ total_servers: int
 votes: int
 config_file = "config.conf"
 
+# For the lab 7
+commitIndex: int
+lastApplied: int
+nextIndex = None  # dict
+matchIndex = None  # dict
+
+logs: list
+appliedLogs: dict
+
+got_answers: bool
+positive_answers: int
+client_answer: bool
+
 
 class ClientSH(pb2_grpc.ClientServiceServicer):
     def Connect(self, request, context):
@@ -61,7 +74,7 @@ class ClientSH(pb2_grpc.ClientServiceServicer):
 
 class RaftSH(pb2_grpc.RaftServiceServicer):
     def RequestVote(self, request, context):
-        global term, last_vote_term, state, is_suspend, leader_id
+        global term, last_vote_term, state, is_suspend, leader_id, nextIndex, matchIndex
 
         if is_suspend:
             return
@@ -75,6 +88,8 @@ class RaftSH(pb2_grpc.RaftServiceServicer):
 
         if term <= term_ and last_vote_term < term_:
             if state > 0:
+                nextIndex = None
+                matchIndex = None
                 restart_timer()
 
             if state == 2:
@@ -86,6 +101,7 @@ class RaftSH(pb2_grpc.RaftServiceServicer):
             leader_id = id_
             print_vote(id_)
             print_state()
+
             reply = {"term": term, "result": True}
             return pb2.TermResultMessage(**reply)
 
@@ -93,7 +109,7 @@ class RaftSH(pb2_grpc.RaftServiceServicer):
         return pb2.TermResultMessage(**reply)
 
     def AppendEntries(self, request, context):
-        global term, last_vote_term, state, leader_id, is_suspend
+        global term, last_vote_term, state, leader_id, is_suspend, nextIndex, matchIndex, logs, appliedLogs, lastApplied
 
         if is_suspend:
             return
@@ -107,6 +123,8 @@ class RaftSH(pb2_grpc.RaftServiceServicer):
 
         if term_ >= term:
             if state > 0:
+                nextIndex = None
+                matchIndex = None
                 restart_timer()
 
             if state == 2:
@@ -123,16 +141,30 @@ class RaftSH(pb2_grpc.RaftServiceServicer):
             reply = {"term": term, "result": True}
             return pb2.TermResultMessage(**reply)
 
+        # UPDATE
+
+        # CHECK
+        # If commitIndex > lastApplied: increment lastApplied and apply log[lastApplied] to state machine
+        if commitIndex > lastApplied:
+            log = logs[lastApplied]
+            key, val = log['cmd']
+            appliedLogs[key] = val
+            lastApplied += 1
+
         reply = {"term": term, "result": False}
         return pb2.TermResultMessage(**reply)
 
 
-def append_entry(host):
-    global term, server_id, votes, state
+def append_entry(id_):
+    global term, server_id, votes, state, servers
+    host = servers[id_]
     try:
         channel = grpc.insecure_channel(host)
         stub = pb2_grpc.RaftServiceStub(channel)
         response = stub.AppendEntries(pb2.TermIdMessage(term=term, id=server_id))
+
+        # UPDATE
+
         if response.term > term:
             close_hb_timer()
             term = response.term
@@ -144,22 +176,41 @@ def append_entry(host):
 
 
 def append_entries():
-    global servers, is_suspend
+    global servers, is_suspend, got_answers, positive_answers, total_servers, client_answer, logs, appliedLogs, \
+        lastApplied
 
     restart_hb_timer()
 
     if is_suspend:
         return
 
+    got_answers = False
+    client_answer = False
+    positive_answers = 0
+
     threads = []
-    for host in servers.values():
-        threads.append(Thread(target=append_entry, args=(host,)))
+    for id_ in servers:
+        threads.append(Thread(target=append_entry, args=(id_,)))
     [t.start() for t in threads]
     [t.join() for t in threads]
 
+    if positive_answers > total_servers // 2:
+        client_answer = True
 
-def request_vote(host):
-    global term, server_id, votes
+    got_answers = True
+
+    # CHECK
+    # If commitIndex > lastApplied: increment lastApplied and apply log[lastApplied] to state machine
+    if commitIndex > lastApplied:
+        log = logs[lastApplied]
+        key, val = log['cmd']
+        appliedLogs[key] = val
+        lastApplied += 1
+
+
+def request_vote(id_):
+    global term, server_id, votes, servers
+    host = servers[id_]
     try:
         channel = grpc.insecure_channel(host)
         stub = pb2_grpc.RaftServiceStub(channel)
@@ -173,14 +224,14 @@ def request_vote(host):
 def request_votes():
     global servers, is_suspend
     threads = []
-    for host in servers.values():
-        threads.append(Thread(target=request_vote, args=(host,)))
+    for id_ in servers:
+        threads.append(Thread(target=request_vote, args=(id_,)))
     [t.start() for t in threads]
     [t.join() for t in threads]
 
 
 def start_election():
-    global term, state, votes, total_servers, last_vote_term, leader_id, server_id
+    global term, state, votes, total_servers, last_vote_term, leader_id, server_id, nextIndex, matchIndex, logs
 
     if is_suspend:
         state = 0
@@ -204,6 +255,15 @@ def start_election():
         leader_id = server_id
         print("Votes received")
         print_state()
+
+        nextIndex = {}
+        matchIndex = {}
+        next_ind = len(logs)
+
+        for id_ in servers:
+            nextIndex[id_] = next_ind + 1
+            matchIndex[id_] = 0
+
         restart_hb_timer()
 
 
@@ -296,6 +356,12 @@ if __name__ == '__main__':
     last_vote_term = -1
     state = 0
     is_suspend = False
+
+    commitIndex = 0
+    lastApplied = 0
+
+    logs = []
+    appliedLogs = {}
 
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     pb2_grpc.add_RaftServiceServicer_to_server(RaftSH(), server)
