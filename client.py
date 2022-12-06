@@ -8,7 +8,8 @@ def get_command_with_args(text: str):
     arr = text.split(' ', 1)
     if len(arr) == 1:
         return arr[0], None
-    command, arguments = arr[0], arr[1]
+    command = arr[0]
+    arguments = arr[1].split(' ')
     return command, arguments
 
 
@@ -21,7 +22,7 @@ if __name__ == '__main__':
             cmd, args = get_command_with_args(line)
             if cmd == 'connect':
                 try:
-                    channel = grpc.insecure_channel(args)
+                    channel = grpc.insecure_channel(args[0])
                     stub = pb2_grpc.ClientServiceStub(channel)
                     response = stub.Connect(pb2.Empty())
                     print("Connect: ", response.id)
@@ -36,12 +37,28 @@ if __name__ == '__main__':
                     print("Not connected")
             elif cmd == 'suspend':
                 if not (channel is None or stub is None):
-                    response = stub.Suspend(pb2.IntMessage(value=int(args)))
+                    response = stub.Suspend(pb2.IntMessage(value=int(args[0])))
                 else:
                     print("Not connected")
             elif cmd == 'quit':
                 print('The client ends')
                 sys.exit(0)
+            elif cmd == 'setval':
+                if not (channel is None or stub is None):
+                    response = stub.SetVal(pb2.SetValMessage(key=int(args[0]), value=int(args[1])))
+                    if not response.success:
+                        print(f'{response.success}\n')
+                else:
+                    print("Not connected")
+            elif cmd == 'getval':
+                if not (channel is None or stub is None):
+                    response = stub.GetVal(pb2.SetValMessage(key=int(args[0]), value=int(args[1])))
+                    if response.success:
+                        print(f'{response.value}\n')
+                    else:
+                        print("None\n")
+                else:
+                    print("Not connected")
             else:
                 print('Unacceptable command')
     except KeyboardInterrupt:

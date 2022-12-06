@@ -14,7 +14,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nraft.proto\"\x07\n\x05\x45mpty\")\n\rTermIdMessage\x12\x0c\n\x04term\x18\x01 \x01(\x05\x12\n\n\x02id\x18\x02 \x01(\x05\"1\n\x11TermResultMessage\x12\x0c\n\x04term\x18\x01 \x01(\x05\x12\x0e\n\x06result\x18\x02 \x01(\x08\"/\n\x10IdAddressMessage\x12\n\n\x02id\x18\x01 \x01(\x05\x12\x0f\n\x07\x61\x64\x64ress\x18\x02 \x01(\t\"\x1b\n\nIntMessage\x12\r\n\x05value\x18\x01 \x01(\x05\x32u\n\x0bRaftService\x12\x31\n\x0bRequestVote\x12\x0e.TermIdMessage\x1a\x12.TermResultMessage\x12\x33\n\rAppendEntries\x12\x0e.TermIdMessage\x1a\x12.TermResultMessage2z\n\rClientService\x12!\n\x07\x43onnect\x12\x06.Empty\x1a\x0e.TermIdMessage\x12&\n\tGetLeader\x12\x06.Empty\x1a\x11.IdAddressMessage\x12\x1e\n\x07Suspend\x12\x0b.IntMessage\x1a\x06.Emptyb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nraft.proto\"\x07\n\x05\x45mpty\")\n\rTermIdMessage\x12\x0c\n\x04term\x18\x01 \x01(\x05\x12\n\n\x02id\x18\x02 \x01(\x05\"1\n\x11TermResultMessage\x12\x0c\n\x04term\x18\x01 \x01(\x05\x12\x0e\n\x06result\x18\x02 \x01(\x08\"/\n\x10IdAddressMessage\x12\n\n\x02id\x18\x01 \x01(\x05\x12\x0f\n\x07\x61\x64\x64ress\x18\x02 \x01(\t\"\x1b\n\nIntMessage\x12\r\n\x05value\x18\x01 \x01(\x05\"+\n\rSetValMessage\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t\"\x1c\n\rGetValMessage\x12\x0b\n\x03key\x18\x01 \x01(\t\"(\n\x15SetValResponseMessage\x12\x0f\n\x07success\x18\x01 \x01(\x08\"7\n\x15GetValResponseMessage\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\r\n\x05value\x18\x02 \x01(\t2u\n\x0bRaftService\x12\x31\n\x0bRequestVote\x12\x0e.TermIdMessage\x1a\x12.TermResultMessage\x12\x33\n\rAppendEntries\x12\x0e.TermIdMessage\x1a\x12.TermResultMessage2\xde\x01\n\rClientService\x12!\n\x07\x43onnect\x12\x06.Empty\x1a\x0e.TermIdMessage\x12&\n\tGetLeader\x12\x06.Empty\x1a\x11.IdAddressMessage\x12\x1e\n\x07Suspend\x12\x0b.IntMessage\x1a\x06.Empty\x12\x30\n\x06SetVal\x12\x0e.SetValMessage\x1a\x16.SetValResponseMessage\x12\x30\n\x06GetVal\x12\x0e.GetValMessage\x1a\x16.GetValResponseMessageb\x06proto3')
 
 
 
@@ -23,6 +23,10 @@ _TERMIDMESSAGE = DESCRIPTOR.message_types_by_name['TermIdMessage']
 _TERMRESULTMESSAGE = DESCRIPTOR.message_types_by_name['TermResultMessage']
 _IDADDRESSMESSAGE = DESCRIPTOR.message_types_by_name['IdAddressMessage']
 _INTMESSAGE = DESCRIPTOR.message_types_by_name['IntMessage']
+_SETVALMESSAGE = DESCRIPTOR.message_types_by_name['SetValMessage']
+_GETVALMESSAGE = DESCRIPTOR.message_types_by_name['GetValMessage']
+_SETVALRESPONSEMESSAGE = DESCRIPTOR.message_types_by_name['SetValResponseMessage']
+_GETVALRESPONSEMESSAGE = DESCRIPTOR.message_types_by_name['GetValResponseMessage']
 Empty = _reflection.GeneratedProtocolMessageType('Empty', (_message.Message,), {
   'DESCRIPTOR' : _EMPTY,
   '__module__' : 'raft_pb2'
@@ -58,6 +62,34 @@ IntMessage = _reflection.GeneratedProtocolMessageType('IntMessage', (_message.Me
   })
 _sym_db.RegisterMessage(IntMessage)
 
+SetValMessage = _reflection.GeneratedProtocolMessageType('SetValMessage', (_message.Message,), {
+  'DESCRIPTOR' : _SETVALMESSAGE,
+  '__module__' : 'raft_pb2'
+  # @@protoc_insertion_point(class_scope:SetValMessage)
+  })
+_sym_db.RegisterMessage(SetValMessage)
+
+GetValMessage = _reflection.GeneratedProtocolMessageType('GetValMessage', (_message.Message,), {
+  'DESCRIPTOR' : _GETVALMESSAGE,
+  '__module__' : 'raft_pb2'
+  # @@protoc_insertion_point(class_scope:GetValMessage)
+  })
+_sym_db.RegisterMessage(GetValMessage)
+
+SetValResponseMessage = _reflection.GeneratedProtocolMessageType('SetValResponseMessage', (_message.Message,), {
+  'DESCRIPTOR' : _SETVALRESPONSEMESSAGE,
+  '__module__' : 'raft_pb2'
+  # @@protoc_insertion_point(class_scope:SetValResponseMessage)
+  })
+_sym_db.RegisterMessage(SetValResponseMessage)
+
+GetValResponseMessage = _reflection.GeneratedProtocolMessageType('GetValResponseMessage', (_message.Message,), {
+  'DESCRIPTOR' : _GETVALRESPONSEMESSAGE,
+  '__module__' : 'raft_pb2'
+  # @@protoc_insertion_point(class_scope:GetValResponseMessage)
+  })
+_sym_db.RegisterMessage(GetValResponseMessage)
+
 _RAFTSERVICE = DESCRIPTOR.services_by_name['RaftService']
 _CLIENTSERVICE = DESCRIPTOR.services_by_name['ClientService']
 if _descriptor._USE_C_DESCRIPTORS == False:
@@ -73,8 +105,16 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _IDADDRESSMESSAGE._serialized_end=164
   _INTMESSAGE._serialized_start=166
   _INTMESSAGE._serialized_end=193
-  _RAFTSERVICE._serialized_start=195
-  _RAFTSERVICE._serialized_end=312
-  _CLIENTSERVICE._serialized_start=314
-  _CLIENTSERVICE._serialized_end=436
+  _SETVALMESSAGE._serialized_start=195
+  _SETVALMESSAGE._serialized_end=238
+  _GETVALMESSAGE._serialized_start=240
+  _GETVALMESSAGE._serialized_end=268
+  _SETVALRESPONSEMESSAGE._serialized_start=270
+  _SETVALRESPONSEMESSAGE._serialized_end=310
+  _GETVALRESPONSEMESSAGE._serialized_start=312
+  _GETVALRESPONSEMESSAGE._serialized_end=367
+  _RAFTSERVICE._serialized_start=369
+  _RAFTSERVICE._serialized_end=486
+  _CLIENTSERVICE._serialized_start=489
+  _CLIENTSERVICE._serialized_end=711
 # @@protoc_insertion_point(module_scope)
