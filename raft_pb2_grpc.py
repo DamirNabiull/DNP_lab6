@@ -16,12 +16,12 @@ class RaftServiceStub(object):
         """
         self.RequestVote = channel.unary_unary(
                 '/RaftService/RequestVote',
-                request_serializer=raft__pb2.TermIdMessage.SerializeToString,
+                request_serializer=raft__pb2.RequestVoteMessage.SerializeToString,
                 response_deserializer=raft__pb2.TermResultMessage.FromString,
                 )
         self.AppendEntries = channel.unary_unary(
                 '/RaftService/AppendEntries',
-                request_serializer=raft__pb2.TermIdMessage.SerializeToString,
+                request_serializer=raft__pb2.AppendEntriesMessage.SerializeToString,
                 response_deserializer=raft__pb2.TermResultMessage.FromString,
                 )
 
@@ -46,12 +46,12 @@ def add_RaftServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'RequestVote': grpc.unary_unary_rpc_method_handler(
                     servicer.RequestVote,
-                    request_deserializer=raft__pb2.TermIdMessage.FromString,
+                    request_deserializer=raft__pb2.RequestVoteMessage.FromString,
                     response_serializer=raft__pb2.TermResultMessage.SerializeToString,
             ),
             'AppendEntries': grpc.unary_unary_rpc_method_handler(
                     servicer.AppendEntries,
-                    request_deserializer=raft__pb2.TermIdMessage.FromString,
+                    request_deserializer=raft__pb2.AppendEntriesMessage.FromString,
                     response_serializer=raft__pb2.TermResultMessage.SerializeToString,
             ),
     }
@@ -76,7 +76,7 @@ class RaftService(object):
             timeout=None,
             metadata=None):
         return grpc.experimental.unary_unary(request, target, '/RaftService/RequestVote',
-            raft__pb2.TermIdMessage.SerializeToString,
+            raft__pb2.RequestVoteMessage.SerializeToString,
             raft__pb2.TermResultMessage.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
@@ -93,7 +93,7 @@ class RaftService(object):
             timeout=None,
             metadata=None):
         return grpc.experimental.unary_unary(request, target, '/RaftService/AppendEntries',
-            raft__pb2.TermIdMessage.SerializeToString,
+            raft__pb2.AppendEntriesMessage.SerializeToString,
             raft__pb2.TermResultMessage.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

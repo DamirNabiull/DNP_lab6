@@ -1,8 +1,8 @@
 syntax = "proto3";
 
 service RaftService {
-  rpc RequestVote(TermIdMessage) returns (TermResultMessage);
-  rpc AppendEntries(TermIdMessage) returns (TermResultMessage);
+  rpc RequestVote(RequestVoteMessage) returns (TermResultMessage);
+  rpc AppendEntries(AppendEntriesMessage) returns (TermResultMessage);
 }
 
 service ClientService {
@@ -14,6 +14,28 @@ service ClientService {
 }
 
 message Empty {}
+
+message RequestVoteMessage {
+  int32 term = 1;
+  int32 id = 2;
+  int32 lastLogIndex = 3;
+  int32 lastLogTerm = 4;
+}
+
+message AppendEntriesMessage {
+  int32 term = 1;
+  int32 id = 2;
+  int32 prevLogIndex = 3;
+  int32 prevLogTerm = 4;
+  repeated Entry entries = 5;
+  int32 leaderCommit = 6;
+}
+
+message Entry {
+  int32 index = 1;
+  int32 term = 2;
+  repeated string command = 3;
+}
 
 message TermIdMessage {
   int32 term = 1;
