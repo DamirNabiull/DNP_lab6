@@ -9,6 +9,8 @@ service ClientService {
   rpc Connect(Empty) returns (TermIdMessage);
   rpc GetLeader(Empty) returns (IdAddressMessage);
   rpc Suspend(IntMessage) returns (Empty);
+  rpc SetVal(SetValMessage) returns (SetValResponseMessage);
+  rpc GetVal(GetValMessage) returns (GetValResponseMessage);
 }
 
 message Empty {}
@@ -30,4 +32,22 @@ message IdAddressMessage{
 
 message IntMessage {
   int32 value = 1;
+}
+
+message SetValMessage {
+  string key = 1;
+  string value = 2;
+}
+
+message GetValMessage {
+  string key = 1;
+}
+
+message SetValResponseMessage {
+  bool success = 1;
+}
+
+message GetValResponseMessage {
+  bool success = 1;
+  string value = 2;
 }
