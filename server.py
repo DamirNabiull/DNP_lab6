@@ -1,4 +1,5 @@
 import sys
+import time
 from concurrent import futures
 from random import randint
 from threading import Timer, Thread, Lock
@@ -70,6 +71,47 @@ class ClientSH(pb2_grpc.ClientServiceServicer):
         print("Command from client: suspend", suspend_time)
         start_suspend(suspend_time)
         return pb2.Empty(**{})
+
+    def SetVal(self, request, context):
+        global state, got_answers, client_answer, logs, term
+
+        if state == 1:
+            reply = {"success": False}
+            return pb2.SetValResponseMessage(**reply)
+        elif state == 0:
+            host = servers[leader_id]
+            channel = grpc.insecure_channel(host)
+            stub = pb2_grpc.ClientServiceStub(channel)
+            response = stub.SetVal(request)
+            return response
+
+        key, val = request.key, request.value
+
+        log = {
+            'index': len(logs) + 1,
+            'term': term,
+            'cmd': (key, val)
+        }
+        logs.append(log)
+
+        while not got_answers:
+            continue
+
+        reply = {"success": client_answer}
+        return pb2.SetValResponseMessage(**reply)
+
+    def GetVal(self, request, context):
+        global appliedLogs
+
+        key = request.key
+
+        if key in appliedLogs:
+            value = appliedLogs[key]
+            reply = {'success': True, 'value': value}
+            return pb2.GetValResponseMessage(**reply)
+
+        reply = {'success': False, 'value': 'None'}
+        return pb2.GetValResponseMessage(**reply)
 
 
 class RaftSH(pb2_grpc.RaftServiceServicer):
