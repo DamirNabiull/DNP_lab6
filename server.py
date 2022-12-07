@@ -37,6 +37,7 @@ matchIndex = None  # dict
 logs: list
 appliedLogs: dict
 
+wait_answer: bool
 got_answers: bool
 positive_answers: int
 client_answer: bool
@@ -90,9 +91,14 @@ class ClientSH(pb2_grpc.ClientServiceServicer):
         log = {
             'index': len(logs) + 1,
             'term': term,
-            'cmd': (key, val)
+            'command': (key, val)
         }
+
+        print(log)
+
         logs.append(log)
+
+        print(logs)
 
         while not got_answers:
             continue
@@ -101,9 +107,12 @@ class ClientSH(pb2_grpc.ClientServiceServicer):
         return pb2.SetValResponseMessage(**reply)
 
     def GetVal(self, request, context):
-        global appliedLogs
+        global appliedLogs, nextIndex, matchIndex, logs
 
         key = request.key
+
+        print(nextIndex, matchIndex)
+        print(logs)
 
         if key in appliedLogs:
             value = appliedLogs[key]
@@ -116,19 +125,31 @@ class ClientSH(pb2_grpc.ClientServiceServicer):
 
 class RaftSH(pb2_grpc.RaftServiceServicer):
     def RequestVote(self, request, context):
-        global term, last_vote_term, state, is_suspend, leader_id, nextIndex, matchIndex
+        global term, last_vote_term, state, is_suspend, leader_id, nextIndex, matchIndex, logs
 
         if is_suspend:
             return
 
         term_ = request.term
         id_ = request.id
+        last_log_index_ = request.lastLogIndex
+        last_log_term_ = request.lastLogTerm
 
         # UPDATE TIMER
         if state == 0:
             restart_timer()
 
         if term <= term_ and last_vote_term < term_:
+            term = term_
+
+            if len(logs) > last_log_index_:
+                reply = {"term": term, "result": False}
+                return pb2.TermResultMessage(**reply)
+
+            if last_log_index_ != 0 and logs[last_log_index_ - 1]['term'] != last_log_term_:
+                reply = {"term": term, "result": False}
+                return pb2.TermResultMessage(**reply)
+
             if state > 0:
                 nextIndex = None
                 matchIndex = None
@@ -138,7 +159,6 @@ class RaftSH(pb2_grpc.RaftServiceServicer):
                 close_hb_timer()
 
             state = 0
-            term = term_
             last_vote_term = term_
             leader_id = id_
             print_vote(id_)
@@ -151,19 +171,65 @@ class RaftSH(pb2_grpc.RaftServiceServicer):
         return pb2.TermResultMessage(**reply)
 
     def AppendEntries(self, request, context):
-        global term, last_vote_term, state, leader_id, is_suspend, nextIndex, matchIndex, logs, appliedLogs, lastApplied
+        global term, last_vote_term, state, leader_id, is_suspend, nextIndex, matchIndex, logs, appliedLogs, \
+            lastApplied, commitIndex
 
         if is_suspend:
             return
 
         term_ = request.term
         id_ = request.id
+        prev_log_index_ = request.prevLogIndex
+        prev_log_term_ = request.prevLogTerm
+        entries_temp_ = request.entries
+        leader_commit_ = request.leaderCommit
+
+        entries_ = []
+        for entry in entries_temp_:
+            log = {
+                'index': entry.index,
+                'term': entry.term,
+                'command': entry.command
+            }
+            entries_.append(log)
 
         # UPDATE TIMER
         if state == 0:
             restart_timer()
 
+        # CHECK
+        # If commitIndex > lastApplied: increment lastApplied and apply log[lastApplied] to state machine
+        if commitIndex > lastApplied:
+            log = logs[lastApplied]
+            key, val = log['command']
+            appliedLogs[key] = val
+            lastApplied += 1
+            print(f'APPLY:\n\t{logs}\n\t{appliedLogs}')
+
         if term_ >= term:
+            term = term_
+
+            if len(logs) < prev_log_index_:
+                # print('ERROR 1')
+                reply = {"term": term, "result": False}
+                return pb2.TermResultMessage(**reply)
+
+            if len(logs) > 0 and prev_log_index_ > 0:
+                if logs[prev_log_index_ - 1]['term'] != prev_log_term_:
+                    # print('ERROR 2')
+                    reply = {"term": term, "result": False}
+                    return pb2.TermResultMessage(**reply)
+
+                for i in range(prev_log_index_, min(len(logs), len(entries_))):
+                    if entries_[i]['term'] != logs[i]['term']:
+                        del logs[i:]
+                        break
+
+            logs += entries_
+
+            if leader_commit_ > commitIndex:
+                commitIndex = min(leader_commit_, len(logs))
+
             if state > 0:
                 nextIndex = None
                 matchIndex = None
@@ -173,7 +239,6 @@ class RaftSH(pb2_grpc.RaftServiceServicer):
                 close_hb_timer()
 
             state = 0
-            term = term_
 
             if leader_id != id_:
                 print_state()
@@ -183,27 +248,40 @@ class RaftSH(pb2_grpc.RaftServiceServicer):
             reply = {"term": term, "result": True}
             return pb2.TermResultMessage(**reply)
 
-        # UPDATE
-
-        # CHECK
-        # If commitIndex > lastApplied: increment lastApplied and apply log[lastApplied] to state machine
-        if commitIndex > lastApplied:
-            log = logs[lastApplied]
-            key, val = log['cmd']
-            appliedLogs[key] = val
-            lastApplied += 1
-
         reply = {"term": term, "result": False}
         return pb2.TermResultMessage(**reply)
 
 
 def append_entry(id_):
-    global term, server_id, votes, state, servers
+    global term, server_id, votes, state, servers, positive_answers, nextIndex, matchIndex, logs, commitIndex
+
     host = servers[id_]
+    next_index = nextIndex[id_]
+    last_log_index = len(logs)
+    # last_log_index = matchIndex[id_]
+    prev_log_index = last_log_index - 1
+
+    if last_log_index > 1:
+        prev_log_term = logs[last_log_index - 2]['term']
+    else:
+        prev_log_term = -1
+
     try:
         channel = grpc.insecure_channel(host)
         stub = pb2_grpc.RaftServiceStub(channel)
-        response = stub.AppendEntries(pb2.TermIdMessage(term=term, id=server_id))
+        if last_log_index >= next_index:
+            logs_to_send = logs[next_index - 1:]
+        else:
+            logs_to_send = []
+
+        response = stub.AppendEntries(pb2.AppendEntriesMessage(term=term,
+                                                               id=server_id,
+                                                               prevLogIndex=prev_log_index,
+                                                               prevLogTerm=prev_log_term,
+                                                               entries=logs_to_send,
+                                                               leaderCommit=commitIndex))
+
+        # print(host, '\n\t', next_index, last_log_index, prev_log_index, prev_log_term, logs_to_send)
 
         # UPDATE
 
@@ -213,13 +291,22 @@ def append_entry(id_):
             state = 0
             print_state()
             restart_timer()
+        elif last_log_index >= next_index:
+            if response.result:
+                positive_answers += 1
+                nextIndex[id_] += 1
+                matchIndex[id_] += 1
+            else:
+                nextIndex[id_] -= 1
+
     except Exception as e:
+        # print(e)
         pass
 
 
 def append_entries():
     global servers, is_suspend, got_answers, positive_answers, total_servers, client_answer, logs, appliedLogs, \
-        lastApplied
+        lastApplied, commitIndex
 
     restart_hb_timer()
 
@@ -236,7 +323,9 @@ def append_entries():
     [t.start() for t in threads]
     [t.join() for t in threads]
 
-    if positive_answers > total_servers // 2:
+    if positive_answers >= total_servers // 2:
+        print(positive_answers)
+        commitIndex += 1
         client_answer = True
 
     got_answers = True
@@ -245,18 +334,30 @@ def append_entries():
     # If commitIndex > lastApplied: increment lastApplied and apply log[lastApplied] to state machine
     if commitIndex > lastApplied:
         log = logs[lastApplied]
-        key, val = log['cmd']
+        key, val = log['command']
         appliedLogs[key] = val
         lastApplied += 1
+        print(f'APPLY:\n\t{logs}\n\t{appliedLogs}')
 
 
 def request_vote(id_):
-    global term, server_id, votes, servers
+    global term, server_id, votes, servers, logs
     host = servers[id_]
+    last_log_index = len(logs)
+
+    if last_log_index > 0:
+        last_log_term = logs[last_log_index - 1]['term']
+    else:
+        last_log_term = -1
+
     try:
         channel = grpc.insecure_channel(host)
         stub = pb2_grpc.RaftServiceStub(channel)
-        response = stub.RequestVote(pb2.TermIdMessage(term=term, id=server_id))
+        response = stub.RequestVote(pb2.RequestVoteMessage(term=term,
+                                                           id=server_id,
+                                                           lastLogIndex=last_log_index,
+                                                           lastLogTerm=last_log_term, ))
+
         if response.result:
             votes += 1
     except Exception as e:
