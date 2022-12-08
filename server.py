@@ -74,7 +74,7 @@ class ClientSH(pb2_grpc.ClientServiceServicer):
         return pb2.Empty(**{})
 
     def SetVal(self, request, context):
-        global state, got_answers, client_answer, logs, term
+        global state, got_answers, client_answer, logs, term, wait_answer
 
         if state == 1:
             reply = {"success": False}
@@ -87,6 +87,7 @@ class ClientSH(pb2_grpc.ClientServiceServicer):
             return response
 
         key, val = request.key, request.value
+        wait_answer = True
 
         log = {
             'index': len(logs) + 1,
@@ -94,11 +95,12 @@ class ClientSH(pb2_grpc.ClientServiceServicer):
             'command': (key, val)
         }
 
+        print('\nADD LOG:')
         print(log)
 
         logs.append(log)
 
-        print(logs)
+        # print(logs)
 
         while not got_answers:
             continue
@@ -111,8 +113,8 @@ class ClientSH(pb2_grpc.ClientServiceServicer):
 
         key = request.key
 
-        print(nextIndex, matchIndex)
-        print(logs)
+        # print(nextIndex, matchIndex)
+        # print(logs)
 
         if key in appliedLogs:
             value = appliedLogs[key]
@@ -193,18 +195,11 @@ class RaftSH(pb2_grpc.RaftServiceServicer):
             }
             entries_.append(log)
 
+        # print(entries_, commitIndex, leader_commit_, len(logs))
+
         # UPDATE TIMER
         if state == 0:
             restart_timer()
-
-        # CHECK
-        # If commitIndex > lastApplied: increment lastApplied and apply log[lastApplied] to state machine
-        if commitIndex > lastApplied:
-            log = logs[lastApplied]
-            key, val = log['command']
-            appliedLogs[key] = val
-            lastApplied += 1
-            print(f'APPLY:\n\t{logs}\n\t{appliedLogs}')
 
         if term_ >= term:
             term = term_
@@ -245,6 +240,15 @@ class RaftSH(pb2_grpc.RaftServiceServicer):
 
             leader_id = id_
 
+            # CHECK
+            # If commitIndex > lastApplied: increment lastApplied and apply log[lastApplied] to state machine
+            if commitIndex > lastApplied:
+                log = logs[lastApplied]
+                key, val = log['command']
+                appliedLogs[key] = val
+                lastApplied += 1
+                print(f'\nAPPLY: \n\tIndex: {lastApplied}\n\tApplied logs: {appliedLogs}')
+
             reply = {"term": term, "result": True}
             return pb2.TermResultMessage(**reply)
 
@@ -259,10 +263,10 @@ def append_entry(id_):
     next_index = nextIndex[id_]
     last_log_index = len(logs)
     # last_log_index = matchIndex[id_]
-    prev_log_index = last_log_index - 1
+    prev_log_index = next_index - 1
 
-    if last_log_index > 1:
-        prev_log_term = logs[last_log_index - 2]['term']
+    if prev_log_index > 0:
+        prev_log_term = logs[prev_log_index - 1]['term']
     else:
         prev_log_term = -1
 
@@ -281,7 +285,7 @@ def append_entry(id_):
                                                                entries=logs_to_send,
                                                                leaderCommit=commitIndex))
 
-        # print(host, '\n\t', next_index, last_log_index, prev_log_index, prev_log_term, logs_to_send)
+        # print(host, '\n\t', next_index, last_log_index, prev_log_index, prev_log_term, logs_to_send, '\n\t', commitIndex)
 
         # UPDATE
 
@@ -294,10 +298,12 @@ def append_entry(id_):
         elif last_log_index >= next_index:
             if response.result:
                 positive_answers += 1
-                nextIndex[id_] += 1
-                matchIndex[id_] += 1
+                nextIndex[id_] += len(logs_to_send)
+                matchIndex[id_] = nextIndex[id_] - 1
+                # print(nextIndex)
             else:
                 nextIndex[id_] -= 1
+                # print(nextIndex)
 
     except Exception as e:
         # print(e)
@@ -306,13 +312,14 @@ def append_entry(id_):
 
 def append_entries():
     global servers, is_suspend, got_answers, positive_answers, total_servers, client_answer, logs, appliedLogs, \
-        lastApplied, commitIndex
+        lastApplied, commitIndex, matchIndex, term, wait_answer
 
     restart_hb_timer()
 
     if is_suspend:
         return
 
+    client_wait = wait_answer
     got_answers = False
     client_answer = False
     positive_answers = 0
@@ -324,11 +331,27 @@ def append_entries():
     [t.join() for t in threads]
 
     if positive_answers >= total_servers // 2:
-        print(positive_answers)
+        # print('POSITIVE:')
+        # print(positive_answers)
+        # print(commitIndex)
         commitIndex += 1
         client_answer = True
 
-    got_answers = True
+    if client_wait:
+        # print(positive_answers)
+        wait_answer = False
+        got_answers = True
+
+    for k in matchIndex:
+        n = matchIndex[k]
+        if n > commitIndex:
+            c = 0
+            for j in matchIndex:
+                if matchIndex[j] >= n:
+                    c += 1
+
+            if c >= total_servers // 2 and logs[n-1]['term'] == term:
+                commitIndex = n
 
     # CHECK
     # If commitIndex > lastApplied: increment lastApplied and apply log[lastApplied] to state machine
@@ -337,7 +360,7 @@ def append_entries():
         key, val = log['command']
         appliedLogs[key] = val
         lastApplied += 1
-        print(f'APPLY:\n\t{logs}\n\t{appliedLogs}')
+        print(f'\nAPPLY: \n\tIndex: {lastApplied}\n\tApplied logs: {appliedLogs}')
 
 
 def request_vote(id_):
@@ -505,6 +528,8 @@ if __name__ == '__main__':
 
     logs = []
     appliedLogs = {}
+
+    wait_answer = False
 
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     pb2_grpc.add_RaftServiceServicer_to_server(RaftSH(), server)

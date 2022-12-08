@@ -46,8 +46,7 @@ if __name__ == '__main__':
             elif cmd == 'setval':
                 if not (channel is None or stub is None):
                     response = stub.SetVal(pb2.SetValMessage(key=args[0], value=args[1]))
-                    if not response.success:
-                        print(f'{response.success}')
+                    # print(f'{response.success}')
                 else:
                     print("Not connected")
             elif cmd == 'getval':
